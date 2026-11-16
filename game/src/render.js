@@ -30,7 +30,7 @@ function waveBand(ctx, time, baseY, amp, speed, color, width) {
 
 function drawOrb(ctx, orb, time) {
   const pulse = 1 + Math.sin(time * 3 + orb.phase) * 0.12;
-  const r = orb.r * pulse;
+  const r = orb.r * pulse * 1.2;
   const color = orb.star ? '#ffb454' : '#37f2e2';
   ctx.save();
   ctx.shadowColor = color;
@@ -96,6 +96,7 @@ function drawSkiff(ctx, player, time) {
   // Invulnerability blink: the skiff flickers while shielded.
   if (player.invT > 0 && Math.floor(time * 12) % 2 === 0) ctx.globalAlpha = 0.45;
   ctx.rotate(player.angle);
+  ctx.scale(1.3, 1.3);
   // Hull: a slim leaf, teal with a pale rim.
   ctx.fillStyle = '#0f4c5c';
   ctx.strokeStyle = '#9ff5ea';

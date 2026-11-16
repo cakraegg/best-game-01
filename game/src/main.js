@@ -87,7 +87,7 @@ if (shot === 'title') {
   seedTitleScene(world);
 } else if (shot === 'play') {
   startRun(world);
-  for (let i = 0; i < 200; i++) stepOnce(autopilotInput(false), false);
+  for (let i = 0; i < 320; i++) stepOnce(autopilotInput(false), false);
 } else if (shot === 'gameover') {
   startRun(world);
   let guard = 0;
