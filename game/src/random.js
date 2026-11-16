@@ -1,33 +1,34 @@
-// Seeded random numbers for GLOWTIDE: one tiny generator (mulberry32) so a
-// screenshot seed replays the same sea, the same orbs and the same mines
-// every time. Nothing here touches Math.random, so seeded runs are exact.
-export function makeRng(seed) {
-  let a = seed >>> 0;
+// Seeded chance for GLOWTIDE v2: one small generator (mulberry32) so a
+// screenshot seed replays the same sea, the same pearls and the same hazards
+// every time. Nothing in the game calls Math.random — the only nondeterminism
+// a seeded run ever sees is the player's own input.
+export function seededRng(seed) {
+  let state = seed >>> 0;
   return function next() {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
+    mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-/** A number in [min, max). */
-export function range(rng, min, max) {
+/** A float in [min, max). */
+export function between(rng, min, max) {
   return min + rng() * (max - min);
 }
 
 /** An integer in [min, max]. */
-export function intRange(rng, min, max) {
+export function wholeBetween(rng, min, max) {
   return min + Math.floor(rng() * (max - min + 1));
 }
 
-/** One element of an array, uniformly. */
-export function pick(rng, items) {
-  return items[Math.floor(rng() * items.length)];
+/** One element of a list, uniformly. */
+export function chooseOne(rng, list) {
+  return list[Math.floor(rng() * list.length)];
 }
 
 /** True with probability p (0..1). */
-export function chance(rng, p) {
+export function odds(rng, p) {
   return rng() < p;
 }

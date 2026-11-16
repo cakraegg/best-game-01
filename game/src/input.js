@@ -1,26 +1,30 @@
-// Keyboard + pointer state for GLOWTIDE. The game loop reads this object and
-// never touches DOM events directly, so the loop, the pause handling and the
-// screenshot autopilot all steer through one input.
-const GAME_KEYS = new Set([
+// Keyboard + pointer state for GLOWTIDE v2. The loop reads this object and
+// never touches DOM events directly, so live play, the pause handling, the
+// blessing choice and the screenshot autopilot all steer through one input.
+// Keys are edge-triggered through consume(): a press counts for exactly one
+// frame, then it is gone.
+const PLAY_KEYS = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space',
   'Enter', 'KeyR', 'KeyP', 'KeyM',
+  'Digit1', 'Digit2', 'Digit3',
 ]);
 
-export function createInput(canvas) {
-  const keys = new Set();
-  const justPressed = new Set();
+export function makeControls(canvas) {
+  const held = new Set();
+  const pressed = new Set();
   const pointer = { x: 0, y: 0, down: false, seen: false };
+  let clickAt = null;
 
   function onKeyDown(event) {
-    if (!GAME_KEYS.has(event.code)) return;
+    if (!PLAY_KEYS.has(event.code)) return;
     event.preventDefault();
-    if (!event.repeat) justPressed.add(event.code);
-    keys.add(event.code);
+    if (!event.repeat) pressed.add(event.code);
+    held.add(event.code);
   }
 
   function onKeyUp(event) {
-    keys.delete(event.code);
+    held.delete(event.code);
   }
 
   function trackPointer(event) {
@@ -34,38 +38,46 @@ export function createInput(canvas) {
   canvas.addEventListener('pointerdown', (event) => {
     trackPointer(event);
     pointer.down = true;
+    clickAt = { x: pointer.x, y: pointer.y };
   });
   window.addEventListener('pointerup', () => {
     pointer.down = false;
   });
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('blur', () => keys.clear());
+  window.addEventListener('blur', () => held.clear());
 
   return {
-    keys,
+    held,
     pointer,
 
-    /** True once since the last frame the key went down (edge-triggered). */
+    /** True once since the last frame the key went down. */
     consume(code) {
-      if (!justPressed.has(code)) return false;
-      justPressed.delete(code);
+      if (!pressed.has(code)) return false;
+      pressed.delete(code);
       return true;
+    },
+
+    /** The latest click position, once — then it is gone. */
+    takeClick() {
+      const at = clickAt;
+      clickAt = null;
+      return at;
     },
 
     /** Call at the end of each frame: a press only counts for one frame. */
     endFrame() {
-      justPressed.clear();
+      pressed.clear();
     },
 
     /** Movement axis from WASD / arrows, -1..1 on each axis, normalised. */
     axis() {
       let x = 0;
       let y = 0;
-      if (keys.has('ArrowLeft') || keys.has('KeyA')) x -= 1;
-      if (keys.has('ArrowRight') || keys.has('KeyD')) x += 1;
-      if (keys.has('ArrowUp') || keys.has('KeyW')) y -= 1;
-      if (keys.has('ArrowDown') || keys.has('KeyS')) y += 1;
+      if (held.has('ArrowLeft') || held.has('KeyA')) x -= 1;
+      if (held.has('ArrowRight') || held.has('KeyD')) x += 1;
+      if (held.has('ArrowUp') || held.has('KeyW')) y -= 1;
+      if (held.has('ArrowDown') || held.has('KeyS')) y += 1;
       if (x !== 0 && y !== 0) {
         const len = Math.hypot(x, y);
         x /= len;
@@ -77,10 +89,10 @@ export function createInput(canvas) {
     /** True while any movement key is held. */
     get steering() {
       return (
-        keys.has('ArrowLeft') || keys.has('ArrowRight') ||
-        keys.has('ArrowUp') || keys.has('ArrowDown') ||
-        keys.has('KeyW') || keys.has('KeyA') ||
-        keys.has('KeyS') || keys.has('KeyD')
+        held.has('ArrowLeft') || held.has('ArrowRight') ||
+        held.has('ArrowUp') || held.has('ArrowDown') ||
+        held.has('KeyW') || held.has('KeyA') ||
+        held.has('KeyS') || held.has('KeyD')
       );
     },
   };

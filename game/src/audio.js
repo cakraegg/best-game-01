@@ -1,44 +1,46 @@
-// Synthesised sound effects for GLOWTIDE: no audio files at all. Every sound
-// is built from WebAudio oscillators, so the game ships zero assets, loads
+// Synthesised sound for GLOWTIDE v2: no audio files at all. Every effect is
+// built from WebAudio oscillators, so the game ships zero assets, loads
 // nothing over the network, and stays silent (never throws) when the browser
-// has no gesture yet or no audio device.
-export function createAudio() {
-  let ctx = null;
+// has no gesture yet or no audio device. A failed blip must never break the
+// game loop, so every note is wrapped in try/catch.
+export function makeSound() {
+  let ac = null;
   let muted = false;
 
   // The context is made lazily on the first user gesture; before that every
   // effect is a no-op, which keeps headless runs and muted tabs error-free.
   function ensure() {
-    if (ctx) {
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      return ctx;
+    if (ac) {
+      if (ac.state === 'suspended') ac.resume().catch(() => {});
+      return ac;
     }
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      ctx = new AC();
+      ac = new AC();
     } catch {
-      ctx = null;
+      ac = null;
     }
-    return ctx;
+    return ac;
   }
 
-  function tone({ freq, slideTo = null, dur = 0.12, type = 'sine', vol = 0.16, delay = 0 }) {
+  // One note: an oscillator with a gain envelope that falls to silence.
+  function blip({ f, f2 = null, d = 0.12, type = 'sine', v = 0.16, at = 0 }) {
     if (muted) return;
-    const ac = ensure();
-    if (!ac) return;
+    const audio = ensure();
+    if (!audio) return;
     try {
-      const t0 = ac.currentTime + delay;
-      const osc = ac.createOscillator();
-      const gain = ac.createGain();
+      const t0 = audio.currentTime + at;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
       osc.type = type;
-      osc.frequency.setValueAtTime(freq, t0);
-      if (slideTo !== null) osc.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), t0 + dur);
-      gain.gain.setValueAtTime(vol, t0);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      osc.connect(gain).connect(ac.destination);
+      osc.frequency.setValueAtTime(f, t0);
+      if (f2 !== null) osc.frequency.exponentialRampToValueAtTime(Math.max(1, f2), t0 + d);
+      gain.gain.setValueAtTime(v, t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+      osc.connect(gain).connect(audio.destination);
       osc.start(t0);
-      osc.stop(t0 + dur + 0.02);
+      osc.stop(t0 + d + 0.02);
     } catch {
       // A failed blip must never break the game loop.
     }
@@ -55,34 +57,68 @@ export function createAudio() {
       muted = !muted;
       return muted;
     },
-    // Collect blip: pitch climbs with the combo, so a hot streak sounds hot.
+    // Collect blip: the pitch climbs with the combo, so a hot streak sounds hot.
     collect(combo) {
       const base = 520 + Math.min(combo, 8) * 55;
-      tone({ freq: base, slideTo: base * 1.6, dur: 0.09, type: 'sine', vol: 0.14 });
-      tone({ freq: base * 2, dur: 0.06, type: 'triangle', vol: 0.05, delay: 0.02 });
+      blip({ f: base, f2: base * 1.6, d: 0.09, v: 0.14 });
+      blip({ f: base * 2, d: 0.06, type: 'triangle', v: 0.05, at: 0.02 });
     },
-    // Mine hit: a low thud that falls away.
+    // A hit: a low thud that falls away.
     hit() {
-      tone({ freq: 170, slideTo: 42, dur: 0.32, type: 'triangle', vol: 0.22 });
-      tone({ freq: 90, slideTo: 30, dur: 0.28, type: 'sawtooth', vol: 0.08 });
+      blip({ f: 170, f2: 42, d: 0.32, type: 'triangle', v: 0.22 });
+      blip({ f: 90, f2: 30, d: 0.28, type: 'sawtooth', v: 0.08 });
+    },
+    // The shield catches a hit: a bright metallic ping instead of a thud.
+    shield() {
+      blip({ f: 1180, d: 0.1, type: 'triangle', v: 0.16 });
+      blip({ f: 1760, d: 0.14, type: 'sine', v: 0.1, at: 0.05 });
     },
     // Wave up: a bright two-note chime.
     wave() {
-      tone({ freq: 660, dur: 0.12, type: 'sine', vol: 0.14 });
-      tone({ freq: 990, dur: 0.2, type: 'sine', vol: 0.14, delay: 0.1 });
+      blip({ f: 660, d: 0.12, v: 0.14 });
+      blip({ f: 990, d: 0.2, v: 0.14, at: 0.1 });
     },
     // Dash: a short airy sweep upward.
     dash() {
-      tone({ freq: 300, slideTo: 900, dur: 0.14, type: 'sawtooth', vol: 0.05 });
+      blip({ f: 300, f2: 900, d: 0.14, type: 'sawtooth', v: 0.05 });
+    },
+    // A dash wound on the leviathan: a sharp crack.
+    wound() {
+      blip({ f: 220, f2: 880, d: 0.12, type: 'square', v: 0.1 });
+      blip({ f: 660, d: 0.1, type: 'triangle', v: 0.12, at: 0.03 });
+    },
+    // The leviathan dies: a deep boom that falls away.
+    bossDown() {
+      blip({ f: 140, f2: 36, d: 0.6, type: 'sawtooth', v: 0.2 });
+      blip({ f: 523, d: 0.16, v: 0.12, at: 0.1 });
+      blip({ f: 784, d: 0.3, v: 0.12, at: 0.22 });
+    },
+    // Lantern burst: a warm swell.
+    burst() {
+      blip({ f: 440, f2: 1320, d: 0.3, type: 'sine', v: 0.14 });
+      blip({ f: 880, d: 0.24, type: 'triangle', v: 0.08, at: 0.08 });
+    },
+    // A blessing is chosen: three notes stepping up.
+    bless() {
+      blip({ f: 523, d: 0.12, v: 0.13 });
+      blip({ f: 659, d: 0.12, v: 0.13, at: 0.1 });
+      blip({ f: 784, d: 0.22, v: 0.13, at: 0.2 });
     },
     click() {
-      tone({ freq: 800, dur: 0.05, type: 'square', vol: 0.06 });
+      blip({ f: 800, d: 0.05, type: 'square', v: 0.06 });
+    },
+    // Dawn breaks: a slow rising arpeggio.
+    victory() {
+      blip({ f: 392, d: 0.2, v: 0.13 });
+      blip({ f: 523, d: 0.2, v: 0.13, at: 0.16 });
+      blip({ f: 659, d: 0.2, v: 0.13, at: 0.32 });
+      blip({ f: 784, d: 0.44, v: 0.14, at: 0.48 });
     },
     // Game over: three notes stepping down.
     over() {
-      tone({ freq: 392, dur: 0.16, type: 'sine', vol: 0.14 });
-      tone({ freq: 311, dur: 0.16, type: 'sine', vol: 0.14, delay: 0.16 });
-      tone({ freq: 233, dur: 0.34, type: 'sine', vol: 0.14, delay: 0.32 });
+      blip({ f: 392, d: 0.16, v: 0.14 });
+      blip({ f: 311, d: 0.16, v: 0.14, at: 0.16 });
+      blip({ f: 233, d: 0.34, v: 0.14, at: 0.32 });
     },
   };
 }
